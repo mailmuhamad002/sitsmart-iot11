@@ -37,7 +37,9 @@ def load_env(path: Path) -> None:
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
             k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+            if "#" in v:
+                v = v.split("#", 1)[0]
+            os.environ[k.strip()] = v.strip().strip("'\"")
 
 
 for env_file in [".env", ".env.example", ".env.example.txt"]:

@@ -35,7 +35,6 @@ def get_local_ip() -> str:
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.settimeout(0.5)
-        # Tidak benar-benar mengirim data, hanya untuk resolusi interface rute lokal
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
@@ -56,9 +55,12 @@ def load_env(path: Path) -> None:
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
             k, v = line.split("=", 1)
+            # Buang inline comment jika ada tanda #
+            if "#" in v:
+                v = v.split("#", 1)[0]
             k = k.strip()
             v = v.strip().strip("'\"")
-            os.environ.setdefault(k, v)
+            os.environ[k] = v
 
 
 # Muat environment (.env atau .env.example)
@@ -120,7 +122,6 @@ def on_message(client, userdata, msg):
             handle_control(client, data, now)
             return
 
-        # Topik telemetri: sitsmart/<PROJECT_ID>/edge/<ID>/telemetry
         parts = msg.topic.split("/")
         try:
             edge_id = int(parts[3])
@@ -161,7 +162,6 @@ def handle_control(client: mqtt.Client, data: dict, now: float) -> None:
         print("[CONTROL] Timer duduk direset ke 0 detik")
 
     elif cmd == "test_alert":
-        # Menguji jalur 2 arah: membunyikan/menggetarkan HP 1
         test_alert = {
             "ts": int(now * 1000),
             "type": "SLOUCH",
@@ -197,11 +197,9 @@ def publish_loop(client: mqtt.Client) -> None:
             }
             status["total_slouch"] = state_tracker["total_slouch_events"]
 
-        # Publikasikan status terkini untuk Dashboard (retained = true)
         client.publish(T_STATUS, json.dumps(status), qos=0, retain=True)
 
         state = status["state"]
-        # Trigger alert jika kondisi buruk terdeteksi (SLOUCH, LATERAL_LEAN, BREAK)
         if state in ("SLOUCH", "LATERAL_LEAN", "BREAK"):
             is_new_state = state != state_tracker["last_state"]
             time_since_last = now - state_tracker["last_alert_time"]
@@ -218,7 +216,6 @@ def publish_loop(client: mqtt.Client) -> None:
                     "score": status.get("score", 100),
                     "reason": status["reason"],
                 }
-                # Kirim alert 2 arah ke broker -> diterima oleh Dashboard & HP Badan
                 client.publish(T_ALERTS, json.dumps(alert), qos=0)
                 state_tracker["last_alert_time"] = now
                 state_tracker["total_alerts"] += 1
@@ -252,7 +249,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def log_message(self, *args):
-        pass  # Mencegah spam log akses file statis di terminal
+        pass
 
 
 def main() -> None:
@@ -267,7 +264,6 @@ def main() -> None:
     print(f" * Batas duduk   : {params.sit_limit_s} detik")
     print("-" * 60)
 
-    # Inisialisasi MQTT Client (Callback API v2)
     client_id = f"sitsmart-detector-{PROJECT_ID}-{int(time.time())}"
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id)
     client.on_connect = on_connect
@@ -282,11 +278,9 @@ def main() -> None:
 
     client.loop_start()
 
-    # Jalankan background thread evaluasi status
     thread = threading.Thread(target=publish_loop, args=(client,), daemon=True)
     thread.start()
 
-    # Jalankan HTTP Server pada 0.0.0.0 agar bisa diakses seluruh perangkat 1 jaringan
     dashboard_dir = str(ROOT / "dashboard")
     handler = partial(DashboardHandler, directory=dashboard_dir)
     server = ThreadingHTTPServer(("0.0.0.0", SERVER_PORT), handler)

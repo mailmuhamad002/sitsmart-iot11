@@ -159,6 +159,8 @@ function playBeep() {
 }
 
 function handleAlert(a) {
+  // Hanya HP 1 (Badan) yang menerima & memicu alarm getar!
+  if ($("edge").value !== "1") return;
   alertCount++;
   $("o-alerts").textContent = alertCount;
   const box = $("alert-box");
