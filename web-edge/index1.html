@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>SitSmart Edge Client</title>
+<style>
+  :root {
+    --bg: #f3f7f4; --card: #ffffff; --ink: #16241e; --muted: #5e7268; --line: #d8e4dc;
+    --accent: #1e7e4d; --accent-hover: #17653d; --bad: #c2271d; --bad-bg: #fde8e7;
+    --warn: #b86200; --warn-bg: #fff1d6; --good: #1a7f37; --good-bg: #dafbe1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1512; --card: #16221d; --ink: #e3ede8; --muted: #8b9f94; --line: #24352c;
+      --accent: #52c78a; --accent-hover: #40aa72; --bad: #ff7b72; --bad-bg: #3f1a18;
+      --warn: #e39d3b; --warn-bg: #382710; --good: #56d364; --good-bg: #14351d;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 480px; margin: 0 auto; padding: 18px 16px 40px; display: grid; gap: 14px; }
+  header { display: flex; justify-content: space-between; align-items: center; }
+  h1 { font-size: 20px; font-weight: 700; margin: 0; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .badge.connected { background: var(--good-bg); color: var(--good); }
+  .badge.disconnected { background: var(--bad-bg); color: var(--bad); }
+  .badge.waiting { background: var(--warn-bg); color: var(--warn); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+  label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 10px 0 4px; }
+  label:first-child { margin-top: 0; }
+  input, select { width: 100%; font: inherit; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); outline: none; }
+  input:focus, select:focus { border-color: var(--accent); }
+  button { width: 100%; margin-top: 14px; font: inherit; font-weight: 700; padding: 13px; border-radius: 10px; border: 0; background: var(--accent); color: #fff; cursor: pointer; transition: background .15s; }
+  @media (prefers-color-scheme: dark) { button { color: #0d1512; } }
+  button:active { filter: brightness(0.9); }
+  button.stop { background: var(--bad); color: #fff; }
+  button.secondary { background: var(--bg); color: var(--ink); border: 1px solid var(--line); margin-top: 8px; font-weight: 600; padding: 9px; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  #alert-box { display: none; background: var(--bad); color: #fff; padding: 16px; border-radius: 12px; font-weight: 700; text-align: center; animation: pulse .8s infinite alternate; }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.02); } }
+  .hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; line-height: 1.4; }
+  .highlight { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SitSmart Edge</h1>
+    <span id="conn-badge" class="badge disconnected">Offline</span>
+  </header>
+
+  <div id="alert-box">
+    <div id="alert-title" style="font-size:17px;margin-bottom:4px">⚠️ PERBAIKI POSTUR DUDUK!</div>
+    <div id="alert-desc" style="font-size:13px;font-weight:400">Badan membungkuk terlalu lama.</div>
+  </div>
+
+  <section class="card">
+    <label for="pid">PROJECT_ID Kelompok</label>
+    <input id="pid" value="sitsmart_kelompok_07" autocomplete="off" autocapitalize="off" spellcheck="false">
+    
+    <label for="edge">Peran Perangkat Ini</label>
+    <select id="edge">
+      <option value="1">Edge 1 · HP Badan (Kantong dada / ikat di punggung)</option>
+      <option value="2">Edge 2 · HP Kursi (Taruh rata di dudukan kursi)</option>
+    </select>
+
+    <label for="url">MQTT WebSocket Broker</label>
+    <input id="url" value="wss://broker.hivemq.com:8884/mqtt" autocomplete="off" autocapitalize="off" spellcheck="false">
+
+    <button id="btn-toggle">Mulai Membaca Sensor</button>
+    <button id="btn-cal" class="secondary" style="display:none">Kirim Perintah Kalibrasi Tegak</button>
+    <p class="hint">Wajib dibuka melalui <strong>HTTPS</strong> agar browser mengizinkan sensor gerak (Accelerometer & Gyroscope).</p>
+  </section>
+
+  <section class="card">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Data Sensor (Proses 1)</div>
+    <dl>
+      <dt>Status Sensor</dt><dd id="o-sensor">Belum aktif</dd>
+      <dt>Getaran Dinamis (RMS)</dt><dd id="o-rms">–</dd>
+      <dt>Rotasi Giroskop</dt><dd id="o-rot">–</dd>
+      <dt>Gravitasi (gx, gy, gz)</dt><dd id="o-g">–</dd>
+      <dt>Telemetri Terkirim</dt><dd id="o-seq">0</dd>
+      <dt>Alert 2-Arah Diterima</dt><dd id="o-alerts">0</dd>
+    </dl>
+  </section>
+</main>
+
+<script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let running = false, client = null, seq = 0, alertCount = 0, wakeLock = null, tickTimer = null;
+let accMags = [], accVecs = [], emaGravity = null, rotSum = 0, lastMotionT = null, hasGyro = false;
+let audioCtx = null;
+
+/* ---- PROSES 1 (Edge Level): Ekstraksi Fitur & Filtering ---- */
+function windowRms(values) {
+  if (!values.length) return 0;
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function meanVector(vectors) {
+  if (!vectors.length) return [0, 0, 0];
+  return [0, 1, 2].map((i) => vectors.reduce((s, v) => s + v[i], 0) / vectors.length);
+}
+
+function applyEma(curr, prev, alpha = 0.3) {
+  if (!prev) return [...curr];
+  return [
+    alpha * curr[0] + (1 - alpha) * prev[0],
+    alpha * curr[1] + (1 - alpha) * prev[1],
+    alpha * curr[2] + (1 - alpha) * prev[2]
+  ];
+}
+
+function onMotion(e) {
+  const g = e.accelerationIncludingGravity;
+  if (!g || g.x == null) return;
+  const gx = g.x, gy = g.y, gz = g.z;
+  const mag = Math.hypot(gx, gy, gz);
+  accMags.push(mag);
+  accVecs.push([gx, gy, gz]);
+
+  // Low-pass EMA filter gravitasi
+  emaGravity = applyEma([gx, gy, gz], emaGravity, 0.3);
+
+  const r = e.rotationRate;
+  const now = performance.now();
+  if (r && (r.alpha != null || r.beta != null || r.gamma != null)) {
+    hasGyro = true;
+    const dt = lastMotionT ? (now - lastMotionT) / 1000 : 0;
+    const a = (r.alpha || 0) * (Math.PI / 180);
+    const b = (r.beta || 0) * (Math.PI / 180);
+    const c = (r.gamma || 0) * (Math.PI / 180);
+    rotSum += Math.hypot(a, b, c) * dt;
+  }
+  lastMotionT = now;
+}
+
+function playBeep() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime); // 880Hz alert tone
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+function handleAlert(a) {
+  alertCount++;
+  $("o-alerts").textContent = alertCount;
+  const box = $("alert-box");
+  box.style.display = "block";
+  $("alert-title").textContent = a.type === "SLOUCH" ? "⚠️ POSTUR MEMBUNGKUK!" : 
+                               (a.type === "LATERAL_LEAN" ? "⚠️ POSTUR MIRING SAMPING!" : "⏰ WAKTUNYA BERDIRI!");
+  $("alert-desc").textContent = a.reason || "Tegakkan tulang punggung Anda.";
+
+  // Haptic feedback & Web Audio alert
+  if (navigator.vibrate) navigator.vibrate([350, 150, 350, 150, 500]);
+  playBeep();
+
+  clearTimeout(handleAlert.timer);
+  handleAlert.timer = setTimeout(() => { box.style.display = "none"; }, 7000);
+}
+
+function tick() {
+  if (!accMags.length) {
+    $("o-sensor").textContent = "Tidak ada data gerak!";
+    return;
+  }
+  const rms = windowRms(accMags);
+  const grav = emaGravity || meanVector(accVecs);
+  const rot = rotSum;
+
+  accMags = [];
+  accVecs = [];
+  rotSum = 0;
+
+  $("o-sensor").textContent = hasGyro ? "Accelerometer + Gyroscope (OK)" : "Accelerometer aktif (Gyro tidak ada)";
+  $("o-rms").textContent = rms.toFixed(3) + " m/s²";
+  $("o-rot").textContent = rot.toFixed(3) + " rad";
+  $("o-g").textContent = grav.map(v => v.toFixed(1)).join(", ");
+
+  if (client && client.connected) {
+    const edge = $("edge").value;
+    const pid = $("pid").value.trim();
+    const payload = {
+      edge: Number(edge),
+      seq: ++seq,
+      ts: Date.now(),
+      rms: Number(rms.toFixed(4)),
+      rot: Number(rot.toFixed(4)),
+      gravity: grav.map(v => Number(v.toFixed(3)))
+    };
+    client.publish(`sitsmart/${pid}/edge/${edge}/telemetry`, JSON.stringify(payload), { qos: 0 });
+    $("o-seq").textContent = seq;
+  }
+}
+
+async function start() {
+  // Izin DeviceMotion di iOS Safari 13+
+  if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+    try {
+      const res = await DeviceMotionEvent.requestPermission();
+      if (res !== "granted") {
+        $("o-sensor").textContent = "Izin sensor gerak ditolak!";
+        return;
+      }
+    } catch (err) {
+      $("o-sensor").textContent = "Error izin sensor: " + err;
+      return;
+    }
+  }
+
+  window.addEventListener("devicemotion", onMotion, true);
+
+  const pid = $("pid").value.trim();
+  const edge = $("edge").value;
+  const brokerUrl = $("url").value.trim();
+
+  $("conn-badge").textContent = "Menghubungkan…";
+  $("conn-badge").className = "badge waiting";
+
+  const clientId = `sitsmart-web-edge${edge}-${Math.random().toString(16).slice(2, 8)}`;
+  client = mqtt.connect(brokerUrl, { clientId, keepalive: 30 });
+
+  client.on("connect", () => {
+    $("conn-badge").textContent = "Terhubung";
+    $("conn-badge").className = "badge connected";
+    // Multicommunication 2 Arah: HP Badan (Edge 1) subscribe ke topik alerts
+    if (edge === "1") {
+      client.subscribe(`sitsmart/${pid}/alerts`, { qos: 0 });
+    }
+  });
+
+  client.on("close", () => {
+    $("conn-badge").textContent = "Terputus";
+    $("conn-badge").className = "badge disconnected";
+  });
+
+  client.on("message", (topic, payload) => {
+    try {
+      const alertData = JSON.parse(payload.toString());
+      handleAlert(alertData);
+    } catch (e) {}
+  });
+
+  tickTimer = setInterval(tick, 1000);
+  try {
+    if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen");
+  } catch (e) {}
+
+  running = true;
+  $("btn-toggle").textContent = "Hentikan Sensor";
+  $("btn-toggle").className = "stop";
+  $("btn-cal").style.display = "block";
+}
+
+function stop() {
+  window.removeEventListener("devicemotion", onMotion, true);
+  clearInterval(tickTimer);
+  if (client) { client.end(); client = null; }
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+
+  running = false;
+  seq = 0;
+  $("conn-badge").textContent = "Offline";
+  $("conn-badge").className = "badge disconnected";
+  $("o-sensor").textContent = "Belum aktif";
+  $("btn-toggle").textContent = "Mulai Membaca Sensor";
+  $("btn-toggle").className = "";
+  $("btn-cal").style.display = "none";
+}
+
+$("btn-toggle").onclick = () => (running ? stop() : start());
+$("btn-cal").onclick = () => {
+  if (client && client.connected) {
+    const pid = $("pid").value.trim();
+    client.publish(`sitsmart/${pid}/control`, JSON.stringify({ cmd: "calibrate" }), { qos: 0 });
+    alert("Perintah kalibrasi tegak dikirim ke detector!");
+  }
+};
+</script>
+</body>
+</html>

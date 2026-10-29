@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SitSmart IoT - Ergonomic Dashboard</title>
+<style>
+  :root {
+    --bg: #f5f8f6; --card: #ffffff; --ink: #16241e; --muted: #5e7268; --line: #d8e4dc;
+    --good: #1a7f37; --good-bg: #dafbe1; --warn: #b86200; --warn-bg: #fff1d6;
+    --bad: #cf222e; --bad-bg: #ffebe9; --info: #0969da; --info-bg: #ddf4ff;
+    --purple: #8250df; --purple-bg: #fbefff;
+    --chart-line: #0969da; --chart-seat: #e39d3b; --chart-thresh: #cf222e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1512; --card: #16221d; --ink: #e3ede8; --muted: #8b9f94; --line: #24352c;
+      --good: #3fb950; --good-bg: #13381e; --warn: #d29922; --warn-bg: #3c2a13;
+      --bad: #f85149; --bad-bg: #411919; --info: #58a6ff; --info-bg: #152d48;
+      --purple: #bc8cff; --purple-bg: #341f4d;
+      --chart-line: #58a6ff; --chart-seat: #d29922; --chart-thresh: #f85149;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 18px 60px; display: grid; gap: 18px; }
+  header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  h1 { font-size: 22px; margin: 0; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 700; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+  .pill { display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .pill.ok { background: var(--good-bg); color: var(--good); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.bad { background: var(--bad-bg); color: var(--bad); }
+  .pill.info { background: var(--info-bg); color: var(--info); }
+  .pill.purple { background: var(--purple-bg); color: var(--purple); }
+
+  .status-banner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; }
+  .status-main { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .big-badge { font-size: 26px; font-weight: 900; padding: 8px 20px; border-radius: 12px; display: inline-block; }
+  .score-gauge { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 18px; min-width: 120px; text-align: center; }
+  .score-num { font-size: 28px; font-weight: 900; color: var(--good); }
+  .score-lbl { font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+
+  .row-buttons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  button { font: inherit; font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; transition: all .15s; }
+  button:hover { border-color: var(--muted); filter: brightness(0.96); }
+  button.primary { background: var(--info); color: #fff; border-color: var(--info); }
+  button.test-btn { background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 680px) { .grid2 { grid-template-columns: 1fr; } }
+  dl { margin: 10px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 14px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 11px; }
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-bottom: 8px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 14px; height: 3px; margin-right: 6px; vertical-align: middle; }
+  .empty { color: var(--muted); padding: 14px 10px; text-align: center; }
+  footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>SitSmart IoT Dashboard</h1>
+      <span id="proj-badge" class="pill info">Memuat...</span>
+      <span id="lan-hint" class="pill" style="background:var(--line)">LAN IP: ...</span>
+    </div>
+    <span id="conn-pill" class="pill warn">Menghubungkan ke Broker…</span>
+  </header>
+
+  <!-- Status Postur Utama -->
+  <section class="card">
+    <h2>Evaluasi Postur & Ergonomi (Sensor Fusion)</h2>
+    <div class="status-banner">
+      <div class="status-main">
+        <span id="state-badge" class="big-badge info">MEMUAT…</span>
+        <div>
+          <div id="reason-text" style="font-weight:600;font-size:16px">Menunggu data telemetri...</div>
+          <div id="sub-info" style="font-size:12px;color:var(--muted);margin-top:4px">–</div>
+        </div>
+      </div>
+      <div class="score-gauge">
+        <div id="score-val" class="score-num">100%</div>
+        <div class="score-lbl">Indeks Ergonomi</div>
+      </div>
+    </div>
+
+    <div class="row-buttons">
+      <span id="calib-pill" class="pill warn">Belum Dikalibrasi</span>
+      <button id="btn-cal" class="primary">Kalibrasi Postur Tegak</button>
+      <button id="btn-pause">Jeda Monitoring</button>
+      <button id="btn-reset">Reset Timer Duduk</button>
+      <button id="btn-test" class="test-btn">Uji Getar 2-Arah ke HP</button>
+    </div>
+  </section>
+
+  <!-- Kartu Telemetri 2 Edge -->
+  <div class="grid2">
+    <!-- Edge 1 -->
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2>Edge 1 · HP Badan (Postur)</h2>
+        <span id="b-badge" class="pill warn">Offline</span>
+      </div>
+      <dl>
+        <dt>Sudut Condong 3D</dt><dd id="b-lean" style="color:var(--info)">–</dd>
+        <dt>Dekomposisi (Pitch / Roll)</dt><dd id="b-decomp">–</dd>
+        <dt>Getaran Dinamis (RMS)</dt><dd id="b-rms">–</dd>
+        <dt>Rotasi Giroskop</dt><dd id="b-rot">–</dd>
+        <dt>Gravitasi [x, y, z]</dt><dd id="b-g">–</dd>
+        <dt>Telemetri Terakhir</dt><dd id="b-age">–</dd>
+      </dl>
+    </section>
+
+    <!-- Edge 2 -->
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2>Edge 2 · HP Kursi (Keberadaan)</h2>
+        <span id="s-badge" class="pill warn">Offline</span>
+      </div>
+      <dl>
+        <dt>Getaran Kursi (RMS)</dt><dd id="s-rms" style="color:var(--warn)">–</dd>
+        <dt>Rotasi Giroskop</dt><dd id="s-rot">–</dd>
+        <dt>Durasi Duduk Diam</dt><dd id="s-still">–</dd>
+        <dt>Total Waktu Duduk</dt><dd id="s-sit">–</dd>
+        <dt>Gravitasi [x, y, z]</dt><dd id="s-g">–</dd>
+        <dt>Telemetri Terakhir</dt><dd id="s-age">–</dd>
+      </dl>
+    </section>
+  </div>
+
+  <!-- Grafik Live -->
+  <section class="card">
+    <h2>Grafik Sudut Condong Badan (Derajat) — 60 Detik Terakhir</h2>
+    <div class="legend">
+      <span><i style="background:var(--chart-line)"></i>Sudut Kemiringan Badan (°)</span>
+      <span><i style="background:var(--chart-thresh);border-top:1px dashed var(--chart-thresh)"></i>Ambang Batas Membungkuk</span>
+    </div>
+    <svg id="chart-lean" viewBox="0 0 800 200" role="img" aria-label="Grafik kemiringan sudut badan"></svg>
+  </section>
+
+  <!-- Riwayat Alert -->
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2>Riwayat Alert & Notifikasi 2-Arah</h2>
+      <span id="total-alerts-badge" class="pill" style="background:var(--line)">0 Alert</span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Waktu</th><th>Jenis</th><th>Skor</th><th>Tingkat Risiko</th><th>Alasan Pemicu</th></tr>
+      </thead>
+      <tbody id="alerts-body">
+        <tr><td colspan="5" class="empty">Belum ada peringatan postur atau waktu istirahat.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="card">
+    <div><strong>SitSmart IoT Architecture</strong>: 2 Edge Devices (HP) + Cloud MQTT Broker (HiveMQ) + Node 3 Laptop Detector</div>
+    <div id="topic-info">Topik: sitsmart/PROJECT_ID/...</div>
+  </footer>
+</main>
+
+<script src="https://unpkg.com/mqtt@5/dist/mqtt.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const STATE_MAP = {
+  GOOD: ["POSTUR TEGAK (BAIK)", "ok"],
+  SLOUCH: ["MEMBUNGKUK!", "bad"],
+  LATERAL_LEAN: ["MIRING SAMPING!", "bad"],
+  BREAK: ["WAKTUNYA BERDIRI!", "bad"],
+  AWAY: ["ISTIRAHAT AKTIF (AWAY)", "info"],
+  COMMON_MOTION: ["GUNCANGAN BERSAMA", "warn"],
+  CALIBRATE: ["PERLU KALIBRASI", "warn"],
+  OFFLINE: ["PERANGKAT OFFLINE", "warn"],
+  PAUSED: ["MONITORING DIJEDA", "info"],
+};
+
+const historyLean = [];
+let cfg = null, client = null, isMonitoring = true, alertCount = 0;
+
+function ago(s) { return s == null ? "–" : s < 1.5 ? "Baru saja" : Math.round(s) + " dtk lalu"; }
+function mmss(s) { s = Math.round(s || 0); return Math.floor(s / 60) + " mnt " + (s % 60) + " dtk"; }
+function clock(ts) { return new Date(ts).toLocaleTimeString("id-ID"); }
+
+function drawChart() {
+  const W = 800, H = 200, L = 42, R = 15, T = 12, B = 26, maxVal = 60;
+  const x = (i) => L + (i / 59) * (W - L - R);
+  const y = (v) => T + (1 - Math.min(v, maxVal) / maxVal) * (H - T - B);
+
+  let g = "";
+  // Grid lines
+  for (const v of [0, 15, 30, 45, 60]) {
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/>` +
+         `<text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}°</text>`;
+  }
+
+  // Threshold line
+  const thresh = cfg ? cfg.lean_threshold_deg : 20;
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(thresh)}" y2="${y(thresh)}" stroke="var(--chart-thresh)" stroke-dasharray="6 4" stroke-width="1.8" opacity=".8"/>`;
+
+  // Plot path
+  const pts = historyLean.map((v, i) => v == null ? null : [x(i + 60 - historyLean.length), y(v)]);
+  let d = "", pen = false;
+  for (const p of pts) {
+    if (!p) { pen = false; continue; }
+    d += (pen ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1) + " ";
+    pen = true;
+  }
+  if (d) {
+    g += `<path d="${d}" fill="none" stroke="var(--chart-line)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  $("chart-lean").innerHTML = g;
+}
+
+function updateScoreGauge(score) {
+  const el = $("score-val");
+  el.textContent = score + "%";
+  if (score >= 80) el.style.color = "var(--good)";
+  else if (score >= 60) el.style.color = "var(--warn)";
+  else el.style.color = "var(--bad)";
+}
+
+function render(s) {
+  const [label, cls] = STATE_MAP[s.state] || [s.state, "info"];
+  $("state-badge").textContent = label;
+  $("state-badge").className = "big-badge " + cls;
+  $("reason-text").textContent = s.reason;
+  $("sub-info").textContent = "Pembaruan: " + clock(s.ts) + (s.total_slouch ? ` | Total Slouch: ${s.total_slouch}x` : "");
+
+  updateScoreGauge(s.score != null ? s.score : 100);
+
+  $("calib-pill").textContent = s.calibrated ? "Terkalibrasi Tegak" : "Belum Dikalibrasi";
+  $("calib-pill").className = "pill " + (s.calibrated ? "ok" : "warn");
+
+  isMonitoring = s.monitoring;
+  $("btn-pause").textContent = isMonitoring ? "Jeda Monitoring" : "Lanjutkan Monitoring";
+
+  // Edge 1 (Badan)
+  const b = s.body;
+  const bOnline = b && b.age_s <= 5;
+  $("b-badge").textContent = bOnline ? "Online" : "Offline";
+  $("b-badge").className = "pill " + (bOnline ? "ok" : "warn");
+  $("b-lean").textContent = s.lean_deg != null ? s.lean_deg.toFixed(1) + "°" : "–";
+  $("b-decomp").textContent = (s.pitch_deg != null && s.roll_deg != null) ? 
+    `Pitch: ${s.pitch_deg > 0 ? "+" : ""}${s.pitch_deg}° / Roll: ${s.roll_deg > 0 ? "+" : ""}${s.roll_deg}°` : "–";
+  $("b-rms").textContent = b ? b.rms.toFixed(3) + " m/s²" : "–";
+  $("b-rot").textContent = b ? b.rot.toFixed(3) + " rad" : "–";
+  $("b-g").textContent = b && b.gravity ? b.gravity.join(", ") : "–";
+  $("b-age").textContent = b ? ago(b.age_s) : "–";
+
+  // Edge 2 (Kursi)
+  const k = s.seat;
+  const kOnline = k && k.age_s <= 5;
+  $("s-badge").textContent = kOnline ? "Online" : "Offline";
+  $("s-badge").className = "pill " + (kOnline ? "ok" : "warn");
+  $("s-rms").textContent = k ? k.rms.toFixed(3) + " m/s²" : "–";
+  $("s-rot").textContent = k ? k.rot.toFixed(3) + " rad" : "–";
+  $("s-still").textContent = mmss(s.still_s);
+  $("s-sit").textContent = mmss(s.sit_s);
+  $("s-g").textContent = k && k.gravity ? k.gravity.join(", ") : "–";
+  $("s-age").textContent = k ? ago(k.age_s) : "–";
+
+  historyLean.push(s.lean_deg);
+  if (historyLean.length > 60) historyLean.shift();
+  drawChart();
+}
+
+function addAlertRecord(a) {
+  alertCount++;
+  $("total-alerts-badge").textContent = alertCount + " Alert";
+
+  const tb = $("alerts-body");
+  if (tb.querySelector(".empty")) tb.innerHTML = "";
+
+  const tr = document.createElement("tr");
+  const riskPercent = Math.round((a.risk || 0) * 100) + "%";
+  const scoreText = (a.score != null ? a.score : "–") + "%";
+
+  tr.innerHTML = `
+    <td><strong>${clock(a.ts)}</strong></td>
+    <td><span class="pill bad">${a.type}</span></td>
+    <td><strong>${scoreText}</strong></td>
+    <td>${riskPercent}</td>
+    <td>${a.reason}</td>
+  `;
+  tb.prepend(tr);
+  while (tb.children.length > 10) tb.lastChild.remove();
+}
+
+function sendCommand(cmd) {
+  if (client && client.connected) {
+    client.publish(`sitsmart/${cfg.project_id}/control`, JSON.stringify({ cmd }), { qos: 0 });
+  }
+}
+
+$("btn-cal").onclick = () => {
+  sendCommand("calibrate");
+  $("reason-text").textContent = "Mengirim perintah kalibrasi tegak...";
+};
+$("btn-pause").onclick = () => sendCommand(isMonitoring ? "monitor_off" : "monitor_on");
+$("btn-reset").onclick = () => sendCommand("reset_timer");
+$("btn-test").onclick = () => {
+  sendCommand("test_alert");
+  alert("Sinyal alert 2-arah dikirim ke broker! HP 1 (Badan) akan bergetar.");
+};
+
+(async function init() {
+  try {
+    cfg = await (await fetch("/config.json")).json();
+  } catch (e) {
+    cfg = { project_id: "sitsmart_kelompok_07", ws_url: "wss://broker.hivemq.com:8884/mqtt", lean_threshold_deg: 20 };
+  }
+
+  $("proj-badge").textContent = "PROJECT: " + cfg.project_id;
+  if (cfg.local_ip) {
+    $("lan-hint").textContent = `Akses LAN: http://${cfg.local_ip}:${cfg.server_port || 8000}`;
+  }
+
+  const base = `sitsmart/${cfg.project_id}`;
+  $("topic-info").textContent = `Sub: ${base}/status · ${base}/alerts — Pub: ${base}/control`;
+  drawChart();
+
+  client = mqtt.connect(cfg.ws_url, { clientId: "sitsmart-dash-" + Math.random().toString(16).slice(2, 8) });
+  client.on("connect", () => {
+    $("conn-pill").textContent = "Terhubung ke MQTT Cloud";
+    $("conn-pill").className = "pill ok";
+    client.subscribe([`${base}/status`, `${base}/alerts`]);
+  });
+  client.on("close", () => {
+    $("conn-pill").textContent = "Terputus dari Broker";
+    $("conn-pill").className = "pill bad";
+  });
+  client.on("message", (topic, payload) => {
+    let d;
+    try { d = JSON.parse(payload.toString()); } catch { return; }
+    if (topic.endsWith("/status")) render(d);
+    else if (topic.endsWith("/alerts")) addAlertRecord(d);
+  });
+})();
+</script>
+</body>
+</html>
